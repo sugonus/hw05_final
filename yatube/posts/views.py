@@ -61,7 +61,6 @@ def post_create(request):
         post = form.save(commit=False)
         post.author = request.user
         post.save()
-        form.save()
         return redirect('posts:profile', request.user)
 
     else:
@@ -122,7 +121,5 @@ def profile_follow(request, username):
 def profile_unfollow(request, username):
     user = request.user
     author = get_object_or_404(User, username=username)
-    is_follower = Follow.objects.filter(user=user, author=author)
-    if is_follower.exists():
-        is_follower.delete()
+    Follow.objects.filter(user=user, author=author).delete()
     return redirect(reverse('posts:profile', kwargs={'username': author}))
