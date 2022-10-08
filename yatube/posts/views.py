@@ -25,12 +25,10 @@ def group_posts(request, slug):
 def profile(request, username):
     author = get_object_or_404(User, username=username)
     posts = author.posts.all()
-    if request.user.is_authenticated:
-        following = Follow.objects.filter(
-            user=request.user, author=author
-        ).exists()
-    else:
-        following = False
+    following = request.user.is_authenticated and Follow.objects.filter(
+        user=request.user,
+        author=author
+    ).exists()
     context = {
         'author': author,
         'following': following
@@ -62,9 +60,7 @@ def post_create(request):
         post.author = request.user
         post.save()
         return redirect('posts:profile', request.user)
-
-    else:
-        return render(request, 'posts/create_post.html/', {'form': form})
+    return render(request, 'posts/create_post.html/', {'form': form})
 
 
 @login_required

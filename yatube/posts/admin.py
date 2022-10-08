@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Group, Post, Follow
+from .models import Group, Post, Follow, Comment
 
 EMPTY = '-пусто-'
 
@@ -21,3 +21,4 @@ class PostAdmin(admin.ModelAdmin):
 admin.site.register(Post, PostAdmin)
 admin.site.register(Group)
 admin.site.register(Follow)
+admin.site.register(Comment)

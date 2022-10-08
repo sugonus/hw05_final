@@ -6,7 +6,7 @@ from django.conf import settings
 from django.test import Client, TestCase, override_settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.urls import reverse
-from ..models import Post, Comment
+from ..models import Post
 
 User = get_user_model()
 
@@ -80,13 +80,26 @@ class TestsForms(TestCase):
         edited_post = Post.objects.get(pk=new_post.pk)
         self.assertNotEqual(new_post.text, edited_post.text)
 
-    def test_create_comment(self):
-        """После успешной отправки комментарий появляется на странице поста."""
-        comments_count = Comment.objects.count()
-        form_data = {'text': 'Тестовый комментарий'}
-        self.authorized_client.post(
-            reverse('posts:add_comment', args=(f'{self.post.pk}')),
+    def test_image(self):
+        aac_file = b'\x47\x49\x46\x38\x39\x61\x02\x00'
+        uploaded = SimpleUploadedFile(
+            name='small.aac',
+            content=aac_file,
+            content_type='audio/aac'
+        )
+        form_data = {
+            'text': 'Тестовый текст поста',
+            'image': uploaded
+        }
+        response = self.authorized_client.post(
+            reverse('posts:post_create'),
             data=form_data,
             follow=True
         )
-        self.assertEqual(Comment.objects.count(), comments_count + 1)
+        self.assertFormError(
+            response,
+            'form',
+            'image',
+            ('Загрузите правильное изображение. Файл, который вы загрузили, '
+             'поврежден или не является изображением.')
+        )

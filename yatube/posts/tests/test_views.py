@@ -53,6 +53,7 @@ class ViewsTests(TestCase):
         shutil.rmtree(TEMP_MEDIA_ROOT, ignore_errors=True)
 
     def setUp(self):
+        self.guest_client = Client()
         self.authorized_client = Client()
         self.authorized_client.force_login(ViewsTests.user)
 
@@ -210,39 +211,113 @@ class ViewsTests(TestCase):
         response = self.authorized_client.get(reverse('posts:index'))
         self.assertContains(response, post)
 
-    def authorized_user_can_subscribe_and_unsubscribe(self):
-        """Авторизованный пользователь может подписываться
-        на других пользователей и удалять их из подписок."""
-        follower = User.objects.create_user(username='follower')
-        follow_object = Follow.objects.create(
-            user=follower,
-            author=ViewsTests.user
+    def test_authorized_client_create_comment(self):
+        """После успешной отправки комментарий появляется на странице поста,
+        если пользователь был авторизован."""
+        text = 'Тестовый комментарий'
+        self.authorized_client.post(
+            reverse('posts:add_comment', args=(f'{self.post.pk}')),
+            data={'text': text},
+            follow=True
         )
-        follower_client = Client()
-        follower_client.force_login(follower)
-        response = follower_client.get(reverse('posts:follow_index'))
+        response = self.authorized_client.get(reverse(
+            'posts:post_detail',
+            args=(f'{self.post.pk}')
+        ))
+        self.assertContains(response, text)
+
+    def test_guest_client_create_comment(self):
+        """После успешной отправки комментарий не появляется на странице поста,
+        если пользователь не был авторизован."""
+        text = 'Тестовый комментарий'
+        self.guest_client.post(
+            reverse('posts:add_comment', args=(f'{self.post.pk}')),
+            data={'text': text},
+            follow=True
+        )
+        response = self.guest_client.get(reverse(
+            'posts:post_detail',
+            args=(f'{self.post.pk}')
+        ))
+        self.assertNotContains(response, text)
+
+
+class TestSubscriptions(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.author = User.objects.create_user(username='author')
+        Post.objects.create(
+            text='Тестовый текст',
+            author=cls.author,
+        )
+
+    def setUp(self):
+        self.follower = User.objects.create_user(username='follower')
+        self.follower_client = Client()
+        self.follower_client.force_login(self.follower)
+        self.not_follower_client = Client()
+        self.not_follower_client.force_login(
+            User.objects.create_user(username='not-follower')
+        )
+        self.follower_client.get(reverse(
+            'posts:profile_follow',
+            kwargs={'username': TestSubscriptions.author}
+        ))
+
+    def test_authorized_user_can_subscribe(self):
+        """Авторизованный пользователь может подписываться
+        на других пользователей."""
+        follower = Follow.objects.filter(
+            user=self.follower,
+            author=TestSubscriptions.author
+        )
+        self.assertTrue(follower.exists())
+
+    def test_authorized_user_can_unsubscribe(self):
+        """Авторизованный пользователь может отписываться
+        от других пользователей."""
+        self.follower_client.get(reverse(
+            'posts:profile_unfollow',
+            kwargs={'username': TestSubscriptions.author}
+        ))
+        follower = Follow.objects.filter(
+            user=self.follower,
+            author=TestSubscriptions.author
+        )
+        self.assertFalse(follower.exists())
+
+    def test_new_user_post_appears_in_feed_of_those_who_follow(self):
+        """Новая запись пользователя появляется в ленте тех,
+        кто на него подписан."""
+        response = self.follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 1)
-        follow_object.delete()
-        response = follower_client.get(reverse('posts:follow_index'))
+
+    def test_new_user_post_dont_appear_in_feed_of_those_who_arent_follow(self):
+        """Новая запись пользователя не появляется в ленте тех,
+        кто на него не подписан."""
+        response = self.not_follower_client.get(reverse('posts:follow_index'))
         self.assertEqual(len(response.context['page_obj']), 0)
 
-    def new_user_post_appears_in_feed_of_those_who_follow(self):
-        """Новая запись пользователя появляется в ленте тех, кто на него
-        подписан и не появляется в ленте тех, кто не подписан."""
-        follower = User.objects.create_user(username='follower')
-        not_follower = User.objects.create_user(username='not-follower')
-        Follow.objects.create(
-            user=follower,
-            author=ViewsTests.user
-        )
-        follower_client = Client()
-        follower_client.force_login(follower)
-        response = follower_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context['page_obj']), 1)
-        not_follower_client = Client()
-        not_follower_client.force_login(not_follower)
-        response = not_follower_client.get(reverse('posts:follow_index'))
-        self.assertEqual(len(response.context['page_obj']), 0)
+    def test_cant_follow_same_user_twice(self):
+        """Нельзя подписаться на одного и того же пользователя дважды."""
+        count_1 = len(Follow.objects.all())
+        self.follower_client.get(reverse(
+            'posts:profile_follow',
+            kwargs={'username': TestSubscriptions.author}
+        ))
+        count_2 = len(Follow.objects.all())
+        self.assertEqual(count_1, count_2)
+
+    def test_cant_unfollow_someone_dont_follow(self):
+        """Нельзя отписаться от того, на кого не подписан"""
+        count_1 = len(Follow.objects.all())
+        self.not_follower_client.get(reverse(
+            'posts:profile_unfollow',
+            kwargs={'username': TestSubscriptions.author}
+        ))
+        count_2 = len(Follow.objects.all())
+        self.assertEqual(count_1, count_2)
 
 
 class PaginatorViewsTests(TestCase):
@@ -268,8 +343,8 @@ class PaginatorViewsTests(TestCase):
         self.authorized_client = Client()
         self.authorized_client.force_login(user)
 
-    def test_first_page_contains_ten_records(self):
-        """Количество постов на первой странице равно 10."""
+    def test_first_page_contains_num_records(self):
+        """Количество постов на первой странице равно NUMBER_OF_POSTS."""
         responses = (
             self.authorized_client.get(reverse('posts:index')),
             self.authorized_client.get(reverse(
@@ -288,8 +363,8 @@ class PaginatorViewsTests(TestCase):
                     settings.NUMBER_OF_POSTS
                 )
 
-    def test_second_page_contains_three_records(self):
-        """Количество постов на второй странице равно 3."""
+    def test_second_page_contains_offset_records(self):
+        """Количество постов на второй странице равно PAGE_TEST_OFFSET."""
         responses = (
             self.authorized_client.get(reverse('posts:index') + '?page=2'),
             self.authorized_client.get(reverse(

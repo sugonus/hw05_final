@@ -12,7 +12,7 @@ class URLTests(TestCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.user = User.objects.create_user(username='test-user')
-        Group.objects.create(
+        cls.group = Group.objects.create(
             title='Тестовое название',
             slug='test-slug',
             description='Тестовое описание'
@@ -32,9 +32,9 @@ class URLTests(TestCase):
         """Страницы, доступные любому пользователю."""
         url_names = (
             '/',
-            '/group/test-slug/',
+            f'/group/{URLTests.group.slug}/',
             f'/posts/{URLTests.post.pk}/',
-            '/profile/test-user/'
+            f'/profile/{URLTests.user}/'
         )
         for address in url_names:
             with self.subTest(address=address):
@@ -43,8 +43,14 @@ class URLTests(TestCase):
 
     def test_authorized_only_available(self):
         """Страницы, доступные только авторизированному пользователю."""
-        response = self.authorized_client.get('/create/')
-        self.assertEqual(response.status_code, HTTPStatus.OK)
+        url_names = (
+            '/create/',
+            '/follow/'
+        )
+        for address in url_names:
+            with self.subTest(address=address):
+                response = self.authorized_client.get(address)
+                self.assertEqual(response.status_code, HTTPStatus.OK)
 
     def test_author_only_available(self):
         """Страницы, доступные только автору."""
@@ -55,13 +61,11 @@ class URLTests(TestCase):
 
     def test_redirect_anonymous(self):
         """Страницы перенаправляют анонимного пользователя."""
-        user = User.objects.create_user(username='not-author')
-        not_author = Client()
-        not_author.force_login(user)
         url_names = (
             '/create/',
+            '/follow/',
             f'/posts/{URLTests.post.pk}/edit/',
-            f'/posts/{URLTests.post.pk}/comment/'
+            f'/posts/{URLTests.post.pk}/comment/',
         )
         for address in url_names:
             with self.subTest(address=address):
@@ -75,11 +79,6 @@ class URLTests(TestCase):
         response = not_author.get(f'/posts/{URLTests.post.pk}/edit/')
         self.assertEqual(response.status_code, HTTPStatus.FOUND)
 
-    def test_404(self):
-        "Запрос к несуществующей странице"
-        response = self.guest_client.get('/unexisting_page/')
-        self.assertEqual(response.status_code, HTTPStatus.NOT_FOUND)
-
     def test_urls_uses_correct_template(self):
         """URL-адрес использует соответствующий шаблон."""
         url_templates_names = {
@@ -88,7 +87,8 @@ class URLTests(TestCase):
             '/posts/1/': 'posts/post_detail.html/',
             '/profile/test-user/': 'posts/profile.html/',
             '/posts/1/edit/': 'posts/create_post.html/',
-            '/create/': 'posts/create_post.html/'
+            '/create/': 'posts/create_post.html/',
+            '/follow/': 'posts/follow.html/'
         }
         for address, template in url_templates_names.items():
             with self.subTest(address=address):
