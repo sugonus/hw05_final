@@ -8,7 +8,7 @@
 Клонировать репозиторий, перейти в директорию с проектом.
 
 ```
-git clone git@github.com:sugunos/api_yamdb.git
+git clone git@github.com:sugunos/hw05_final.git
 ```
 
 Cоздать и активировать виртуальное окружение:
