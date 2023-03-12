@@ -14,7 +14,7 @@ git clone git@github.com:sugunos/hw05_final.git
 Cоздать и активировать виртуальное окружение:
 
 ```
-python -m venv venv
+python3 -m venv venv
 ```
 
 ```
@@ -30,10 +30,10 @@ pip install -r requirements.txt
 Выполнить миграции:
 
 ```
-python manage.py makemigrations
+python3 manage.py makemigrations
 ```
 ```
-python manage.py migrate
+python3 manage.py migrate
 ```
 
 
